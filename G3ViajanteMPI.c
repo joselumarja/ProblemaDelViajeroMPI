@@ -51,7 +51,7 @@ tour_t pop();
 void push(tour_t tour);
 
 void printBest();
-void best_tour(tour_t tour);
+int best_tour(tour_t tour);
 
 int factible(tour_t tour);
 int estaEnElRecorrido(tour_t tour, int pob);
@@ -72,6 +72,10 @@ int main(int argc, char *argv[]){
 
     int rank, size;
     MPI_Status status;
+    MPI_Request req;
+    int b_message=false;
+
+    tour_t received_best;
 
     MPI_Init(&argc,&argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -202,11 +206,13 @@ int main(int argc, char *argv[]){
             Rec_en_profund(tour);
         }
 
-        
+        /*Repartir los recorridos entre los procesadores*/
+
     }
     else
     {
-        
+        /*Recibir recorridos a ejecutar*/
+
     }
 
     GET_TIME(inicio);
@@ -214,6 +220,26 @@ int main(int argc, char *argv[]){
     {
         tour=pop();
         Rec_en_profund(tour);
+
+        /*Comprobar si se ha recibido algun best nuevo*/
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &b_message, &status);
+			while(b_message==true)
+			{
+				MPI_Recv(buffer,1,tour_t_mpi,MPI_ANY_SOURCE,MPI_ANY_TAG, MPI_COMM_WORLD,&status);
+                received_best=convertBufferToStruct(buffer);
+
+                if(best_tour(received_best)==true)
+                {
+                    freeTour(best);
+                    best=received_best;
+                }
+                else
+                {
+                    freeTour(received_best);
+                }
+                
+				MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &b_message, &status);
+			}
     }
     GET_TIME(fin);
 
@@ -269,16 +295,15 @@ tour_t anadir_pob(tour_t tour, int pob)
     return newTour;
 }
 
-void best_tour(tour_t tour){
-    if(tour->coste<best->coste){
-        freeTour(best);
-        best=tour;
-        printf("New best:\n");
-        printBest();
+int best_tour(tour_t tour)
+{
+    if(tour->coste<best->coste)
+    {
+        return true;
     }
     else
     {
-        freeTour(tour);
+        return false;
     }
 }
 
@@ -304,7 +329,17 @@ void Rec_en_profund(tour_t tour)
         if(digraph[pobOffset]>0)
         {
             tour_t checkTour=anadir_pob(tour,StartNode);
-            best_tour(checkTour);
+            if(best_tour(checkTour)==true)
+            {
+                freeTour(best);
+                best=checkTour;
+
+                /*Notificar al resto de procesos*/
+            }
+            else
+            {
+                freeTour(checkTour);
+            }
         }
     }
     else if(tour->coste<best->coste)
@@ -376,31 +411,4 @@ void convertStructToBuffer(int *buffer, tour_t tour)
     
     for(int i=0; i<=n_cities;i++)
         buffer[i+PoblationsPosition]=tour->pobl[i];
-}
-
-void calcMaxHypercubeNetwork(int Rank, int HypercubeDimension,int *Neightbors, int LocalData, int *Max)
-{
-	int i,ReceivedData;
-	*Max=LocalData;
-
-	for(i=0; i<HypercubeDimension; i++)
-	{
-		MPI_Send(Max, 1, MPI_INT, Neightbors[i], 0, MPI_COMM_WORLD);
-		MPI_Recv(&ReceivedData, 1, MPI_INT, Neightbors[i], MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-		
-		if(ReceivedData>*Max)
-		{
-			*Max=ReceivedData;
-		}
-	} 
-	
-}
-
-void neightborsHypercube(int HypercubeDimension, int Rank, int *Neightbors)
-{	
-	int i;
-	for(i=0; i<HypercubeDimension; i++)
-	{
-		Neightbors[i] = Rank ^ (int) pow(2,i);
-	}
 }
