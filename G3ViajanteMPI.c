@@ -47,6 +47,9 @@ tour_t best;
 tour_t tour;
 my_stack_t pila;
 
+/*Definiendo el tipo de datos mpi para enviar tour struct*/
+MPI_Datatype tour_t_mpi;
+
 /*Definiciones de funciones usadas*/
 tour_t pop();
 void push(tour_t tour);
@@ -58,7 +61,7 @@ int factible(tour_t tour);
 int estaEnElRecorrido(tour_t tour, int pob);
 tour_t anadir_pob(tour_t tour, int pob);
 
-void checkReceivedBests(MPI_Datatype tour_t_mpi);
+void checkReceivedBests();
 
 void Rec_en_profund(tour_t tour);
 
@@ -163,9 +166,6 @@ int main(int argc, char *argv[]){
         
     }
 
-    /*Definiendo el tipo de datos mpi para enviar tour struct*/
-    MPI_Datatype tour_t_mpi;
-
     MPI_Type_contiguous(n_cities+3,MPI_INT,&tour_t_mpi);
     MPI_Type_commit(&tour_t_mpi);
 
@@ -176,18 +176,7 @@ int main(int argc, char *argv[]){
     best->coste=65535;
     best->contador=0;
     best->pobl=(int *) malloc(sizeof(int)*(n_cities+1));
-    
-    /*
-    MPI_Datatype type[3] = {MPI_INT,MPI_INT,MPI_INT};
-    int blocklen[3]={n_cities,1,1};
-
-    MPI_Aint int_extension;
-    MPI_Type_extent(MPI_INT, &int_extension);
-
-    MPI_Aint offsets[3]={(MPI_Aint) 0, int_extension*(n_cities+1),int_extension*(n_cities+1) + int_extension};
-    MPI_Type_create_struct(3,blocklen,offsets,type,&tour_t_mpi);
-    */
-
+ 
     /*Inicializar la pila*/
     pila=(my_stack_t) malloc(sizeof(stack_struct));
     pila->list=(tour_t*) malloc(sizeof(tour_t)*StackSize);
@@ -222,7 +211,7 @@ int main(int argc, char *argv[]){
         Rec_en_profund(tour);
 
         /*Comprobar si se ha recibido algun best nuevo*/
-        checkReceivedBests(tour_t_mpi);
+        checkReceivedBests();
     }
     MPI_Barrier(MPI_COMM_WORLD);
 
@@ -231,7 +220,7 @@ int main(int argc, char *argv[]){
     if(rank==ROOT)
     {
         /*Comprobar si se ha recibido algun best nuevo*/
-        checkReceivedBests(tour_t_mpi);
+        checkReceivedBests();
 
         /*Imprimir resultados: besttour, coste y tiempo*/
         int tiempo=fin-inicio;  /*calculamos tiempo*/
@@ -405,7 +394,7 @@ void convertStructToBuffer(int *buffer, tour_t tour)
         buffer[i+PoblationsPosition]=tour->pobl[i];
 }
 
-void checkReceivedBests(MPI_Datatype tour_t_mpi)
+void checkReceivedBests()
 {
     int b_message;
     MPI_Status status;
