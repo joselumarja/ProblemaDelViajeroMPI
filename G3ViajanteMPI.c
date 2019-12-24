@@ -20,6 +20,11 @@
 #define WRONG_FILE_PATH -4
 #define STATUS_OK 0
 
+/*MPI packet positions*/
+#define CostPosition 0
+#define CounterPosition 1
+#define PoblationsPosition 2
+
 typedef struct{
     int* pobl;
     int contador;
@@ -42,8 +47,8 @@ tour_t tour;
 my_stack_t pila;
 
 /*Definiciones de funciones usadas*/
-tour_t pop(my_stack_t pila);
-void push(my_stack_t pila, tour_t tour);
+tour_t pop();
+void push(tour_t tour);
 
 void printBest();
 void best_tour(tour_t tour);
@@ -52,9 +57,12 @@ int factible(tour_t tour);
 int estaEnElRecorrido(tour_t tour, int pob);
 tour_t anadir_pob(tour_t tour, int pob);
 
-void Rec_en_profund(my_stack_t pila);
+void Rec_en_profund(tour_t tour);
 
 void freeTour(tour_t tour);
+
+tour_t convertBufferToStruct(int *buffer);
+void convertStructToBuffer(int *buffer, tour_t tour);
 
 void neightborsHypercube(int HypercubeDimension, int Rank, int *Neightbors);
 void calcMaxHypercubeNetwork(int Rank, int HypercubeDimension,int *Neightbors, int LocalData, int *Max); 
@@ -72,7 +80,7 @@ int main(int argc, char *argv[]){
     double inicio, fin;
     short StatusCode;
 
-    StackSize=(n_cities*((n_cities-3)/2))+2;
+    StackSize=((n_cities*((n_cities-3)/2))+2)/size;
 
     if(rank==ROOT)
     {
@@ -143,31 +151,70 @@ int main(int argc, char *argv[]){
         /*Recibiendo el numero de ciudades*/
         MPI_Bcast(&n_cities, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
+        /*Reservar espacio para diagraph;*/
+        digraph=(int*) malloc(sizeof(int)*n_cities*n_cities);
+
         /*Recibiendo el grafo direccional de las ciudades*/
         MPI_Bcast(digraph, n_cities*n_cities, MPI_INT, ROOT, MPI_COMM_WORLD);
-
+        
     }
-    
-    /*Inicializar tour y besttour;*/
-    tour=(tour_t) malloc(sizeof(tour_struct));
+
+    /*Definiendo el tipo de datos mpi para enviar tour struct*/
+    MPI_Datatype tour_t_mpi;
+
+    MPI_Type_contiguous(n_cities+3,MPI_INT,&tour_t_mpi);
+    MPI_Type_commit(&tour_t_mpi);
+
+    int buffer=(int *) malloc(sizeof(int)*(n_cities+3));
+
+    /*Inicializar best tour*/
     best=(tour_t) malloc(sizeof(tour_struct));
-    pila=(my_stack_t) malloc(sizeof(stack_struct));
-    pila->list=(tour_t*) malloc(sizeof(tour_t)*StackSize);
-
-    tour->pobl=(int *) malloc(sizeof(int));
-    tour->pobl[0]=StartNode;
-    tour->contador=1;
-    tour->coste=0;
-
     best->coste=65535;
     best->contador=0;
-    best->pobl=(int *) malloc(sizeof(int));
+    best->pobl=(int *) malloc(sizeof(int)*(n_cities+1));
+    
+    /*
+    MPI_Datatype type[3] = {MPI_INT,MPI_INT,MPI_INT};
+    int blocklen[3]={n_cities,1,1};
 
-    pila->list[0]=tour;
-    pila->list_sz=1;
+    MPI_Aint int_extension;
+    MPI_Type_extent(MPI_INT, &int_extension);
+
+    MPI_Aint offsets[3]={(MPI_Aint) 0, int_extension*(n_cities+1),int_extension*(n_cities+1) + int_extension};
+    MPI_Type_create_struct(3,blocklen,offsets,type,&tour_t_mpi);
+    */
+
+    /*Inicializar la pila*/
+    pila=(my_stack_t) malloc(sizeof(stack_struct));
+    pila->list=(tour_t*) malloc(sizeof(tour_t)*StackSize);
+    pila->list_sz=0;
+
+    if(rank==ROOT)
+    {
+        tour=(tour_t) malloc(sizeof(tour_struct));
+        tour->pobl=(int *) malloc(sizeof(int));
+        tour->pobl[0]=StartNode;
+        tour->contador=1;
+        tour->coste=0;
+
+        while(pila->list_sz<size)
+        {
+            Rec_en_profund(tour);
+        }
+
+        
+    }
+    else
+    {
+        
+    }
 
     GET_TIME(inicio);
-    Rec_en_profund(pila);
+    while(pila->list_sz>0)
+    {
+        tour=pop();
+        Rec_en_profund(tour);
+    }
     GET_TIME(fin);
 
     /*Imprimir resultados: besttour, coste y tiempo*/
@@ -185,7 +232,7 @@ int main(int argc, char *argv[]){
     freeTour(best);
 }
 
-tour_t pop(my_stack_t pila)
+tour_t pop()
 {
     tour_t tour=NULL;
 
@@ -199,7 +246,7 @@ tour_t pop(my_stack_t pila)
     return tour;
 }
 
-void push(my_stack_t pila, tour_t tour)
+void push(tour_t tour)
 {
     pila->list[pila->list_sz]=tour;
     pila->list_sz++;
@@ -207,7 +254,7 @@ void push(my_stack_t pila, tour_t tour)
 
 tour_t anadir_pob(tour_t tour, int pob)
 {
-    int poblation_offset=(tour->pobl[tour->contador-1]*N_CITIES)+pob;
+    int poblation_offset=(tour->pobl[tour->contador-1]*n_cities)+pob;
 
     tour_t newTour=(tour_t) malloc(sizeof(tour_struct));
     newTour->pobl=(int *) malloc(sizeof(int)*(tour->contador+1));
@@ -244,39 +291,37 @@ void printBest()
     printf("%d\n",best->pobl[best->contador-1]);
     printf("Coste: %d\n\n",best->coste);
 }
-void Rec_en_profund(my_stack_t pila)
-{
-    tour_t tour;
-    tour_t nuevo_tour;
-    while(pila->list_sz>0)
-    {
-        tour=pop(pila);
-        if(tour->contador==N_CITIES)
-        {
-            int pobOffset=(tour->pobl[tour->contador-1]*N_CITIES)+StartNode;
 
-            if(digraph[pobOffset]>0)
-            {
-                tour_t checkTour=anadir_pob(tour,StartNode);
-                best_tour(checkTour);
-            }
-        }
-        else if(tour->coste<best->coste)
+void Rec_en_profund(tour_t tour)
+{
+
+    tour_t nuevo_tour;
+
+    if(tour->contador==n_cities)
+    {
+        int pobOffset=(tour->pobl[tour->contador-1]*n_cities)+StartNode;
+
+        if(digraph[pobOffset]>0)
         {
-            int i=tour->pobl[tour->contador-1];
-            for(int pobId=0;pobId<N_CITIES;pobId++)
+            tour_t checkTour=anadir_pob(tour,StartNode);
+            best_tour(checkTour);
+        }
+    }
+    else if(tour->coste<best->coste)
+    {
+        int i=tour->pobl[tour->contador-1];
+        for(int pobId=0;pobId<n_cities;pobId++)
+        {
+            if((digraph[(i*n_cities)+pobId]>0)&&(estaEnElRecorrido(tour,pobId)==false))
             {
-                if((digraph[(i*N_CITIES)+pobId]>0)&&(estaEnElRecorrido(tour,pobId)==false))
+                nuevo_tour=anadir_pob(tour,pobId);
+                if(factible(nuevo_tour)==true)
                 {
-                    nuevo_tour=anadir_pob(tour,pobId);
-                    if(factible(nuevo_tour)==true)
-                    {
-                        push(pila,nuevo_tour);
-                    }
-                    else
-                    {
-                        freeTour(nuevo_tour);
-                    }
+                    push(nuevo_tour);
+                }
+                else
+                {
+                    freeTour(nuevo_tour);
                 }
             }
         }
@@ -308,6 +353,29 @@ int factible(tour_t tour)
     }
 
     return true;
+}
+
+tour_t convertBufferToStruct(int *buffer)
+{
+    tour_t tour = (tour_t) malloc(sizeof(tour_struct));
+    tour->pobl = (int *) malloc(sizeof(int)*(n_cities+1));
+
+    tour->contador=buffer[CounterPosition];
+    tour->coste=buffer[CostPosition];
+
+    for(int i=0; i<=n_cities;i++)
+        tour->pobl[i]=buffer[i+PoblationsPosition];
+
+    return tour;
+}
+
+void convertStructToBuffer(int *buffer, tour_t tour)
+{
+    buffer[CostPosition]=tour->coste;
+    buffer[CounterPosition]=tour->contador;
+    
+    for(int i=0; i<=n_cities;i++)
+        buffer[i+PoblationsPosition]=tour->pobl[i];
 }
 
 void calcMaxHypercubeNetwork(int Rank, int HypercubeDimension,int *Neightbors, int LocalData, int *Max)
