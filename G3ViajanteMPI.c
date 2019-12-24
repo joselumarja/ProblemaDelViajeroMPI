@@ -39,8 +39,9 @@ typedef struct{
 typedef stack_struct *my_stack_t;
 
 int n_cities;
-int StackSize;  
+int StackSize;
 int *digraph;
+int *buffer;
 
 tour_t best;
 tour_t tour;
@@ -56,6 +57,8 @@ int best_tour(tour_t tour);
 int factible(tour_t tour);
 int estaEnElRecorrido(tour_t tour, int pob);
 tour_t anadir_pob(tour_t tour, int pob);
+
+void checkReceivedBests(MPI_Datatype tour_t_mpi);
 
 void Rec_en_profund(tour_t tour);
 
@@ -73,9 +76,6 @@ int main(int argc, char *argv[]){
     int rank, size;
     MPI_Status status;
     MPI_Request req;
-    int b_message=false;
-
-    tour_t received_best;
 
     MPI_Init(&argc,&argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -169,7 +169,7 @@ int main(int argc, char *argv[]){
     MPI_Type_contiguous(n_cities+3,MPI_INT,&tour_t_mpi);
     MPI_Type_commit(&tour_t_mpi);
 
-    int buffer=(int *) malloc(sizeof(int)*(n_cities+3));
+    buffer=(int *) malloc(sizeof(int)*(n_cities+3));
 
     /*Inicializar best tour*/
     best=(tour_t) malloc(sizeof(tour_struct));
@@ -222,35 +222,26 @@ int main(int argc, char *argv[]){
         Rec_en_profund(tour);
 
         /*Comprobar si se ha recibido algun best nuevo*/
-        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &b_message, &status);
-			while(b_message==true)
-			{
-				MPI_Recv(buffer,1,tour_t_mpi,MPI_ANY_SOURCE,MPI_ANY_TAG, MPI_COMM_WORLD,&status);
-                received_best=convertBufferToStruct(buffer);
-
-                if(best_tour(received_best)==true)
-                {
-                    freeTour(best);
-                    best=received_best;
-                }
-                else
-                {
-                    freeTour(received_best);
-                }
-                
-				MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &b_message, &status);
-			}
+        checkReceivedBests(tour_t_mpi);
     }
+    MPI_Barrier(MPI_COMM_WORLD);
+
     GET_TIME(fin);
 
-    /*Imprimir resultados: besttour, coste y tiempo*/
-    int tiempo=fin-inicio;  /*calculamos tiempo*/
+    if(rank==ROOT)
+    {
+        /*Comprobar si se ha recibido algun best nuevo*/
+        checkReceivedBests(tour_t_mpi);
 
-    printf("Tiempo empleado en la ejecucion %d s\n",tiempo);
+        /*Imprimir resultados: besttour, coste y tiempo*/
+        int tiempo=fin-inicio;  /*calculamos tiempo*/
 
-    /*best tour*/
-    printf("Best tour:\n");
-    printBest();
+        printf("Tiempo empleado en la ejecucion %d s\n",tiempo);
+
+        /*best tour*/
+        printf("Best tour:\n");
+        printBest();
+    }
 
     /*Liberar memoria dinámica asignada*/
     free(pila->list);
@@ -335,6 +326,7 @@ void Rec_en_profund(tour_t tour)
                 best=checkTour;
 
                 /*Notificar al resto de procesos*/
+                /*USAR FUNCION QUE HE DEFINIDO convertStructToBuffer()*/
             }
             else
             {
@@ -342,7 +334,7 @@ void Rec_en_profund(tour_t tour)
             }
         }
     }
-    else if(tour->coste<best->coste)
+    else
     {
         int i=tour->pobl[tour->contador-1];
         for(int pobId=0;pobId<n_cities;pobId++)
@@ -411,4 +403,30 @@ void convertStructToBuffer(int *buffer, tour_t tour)
     
     for(int i=0; i<=n_cities;i++)
         buffer[i+PoblationsPosition]=tour->pobl[i];
+}
+
+void checkReceivedBests(MPI_Datatype tour_t_mpi)
+{
+    int b_message;
+    MPI_Status status;
+    tour_t received_best;
+
+    MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &b_message, &status);
+	while(b_message==true)
+	{
+	    MPI_Recv(buffer,1,tour_t_mpi,MPI_ANY_SOURCE,MPI_ANY_TAG, MPI_COMM_WORLD,&status);
+        received_best=convertBufferToStruct(buffer);
+
+        if(best_tour(received_best)==true)
+        {
+            freeTour(best);
+            best=received_best;
+        }
+        else
+        {
+            freeTour(received_best);
+        }
+                
+		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &b_message, &status);
+	}
 }
