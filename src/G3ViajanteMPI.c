@@ -15,9 +15,7 @@
 /*MPI defines*/
 #define ROOT 0
 #define WRONG_ARGUMENT_ERROR_CODE -1
-#define WRONG_NUMBER_OF_LAUNCHED_PROCESSES -2
-#define NOT_ENOUGHT_DATA_FOR_PROCESSES -3
-#define WRONG_FILE_PATH -4
+
 #define STATUS_OK 0
 
 /*MPI packet positions*/
@@ -104,7 +102,7 @@ int main(int argc, char *argv[]){
         if ((diagraph_file = fopen(argv[1],"r"))==NULL)
         {
             printf("Error abriendo el archivo.\n");
-            StatusCode=WRONG_FILE_PATH;
+            StatusCode=WRONG_ARGUMENT_ERROR_CODE;
         }
 
         /*Leer de diagraph_file el número de poblaciones, n;*/
