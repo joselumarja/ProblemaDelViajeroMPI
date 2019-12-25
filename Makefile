@@ -23,10 +23,10 @@ $(DIROBJ)%.o: $(DIRSRC)%.c
 	$(MPI) $(CFLAGS) $^ -o $@
 
 test:
-	$(MPIRUN) -n 4 ./G3ViajanteMPI ./archivo_matriz19
+	$(MPIRUN) -n 4 ./G3ViajanteMPI ./archivo_matriz
 
 debug:
-	$(MPIRUN) -np 4 xterm -e gdb -ex run --args ./G3ViajanteMPI ./archivo_matriz19
+	$(MPIRUN) -np 4 xterm -e gdb -ex run --args ./G3ViajanteMPI ./archivo_matriz
 
 clean : 
 	rm -rf *~ core $(DIROBJ) $(DIREXE) $(DIRHEA)*~ $(DIRSRC)*~ $(DIRUTILITIES) 
