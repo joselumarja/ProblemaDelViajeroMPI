@@ -94,8 +94,6 @@ int main(int argc, char *argv[]){
     double inicio, fin;
     short StatusCode;
 
-    StackSize=((n_cities*((n_cities-3)/2))+2)/size;
-
     /*Guardar el resto de nodos con los que hay que comunicarse*/
     setNeightbors(rank,size);
 
@@ -113,6 +111,9 @@ int main(int argc, char *argv[]){
         fscanf(diagraph_file,"%d", &n_cities);
         printf("Numero de ciudades: %d\n\n", n_cities);
 
+        /*Reservar espacio para la pila*/
+        StackSize=((n_cities*((n_cities-3)/2))+2)/(size-1);
+
         /*Leer de diagraph_file el grafo, diagraph;*/
         int NeighbourCost;
 
@@ -129,7 +130,7 @@ int main(int argc, char *argv[]){
                 digraph[(i*n_cities)+j]=NeighbourCost;
                 printf("%d ",NeighbourCost);
             }
-            printf("\n");
+            printf("\n\n");
         }
 		
         /*Notificando a los procesos si no se han producido fallos*/
@@ -169,6 +170,9 @@ int main(int argc, char *argv[]){
 
         /*Recibiendo el numero de ciudades*/
         MPI_Bcast(&n_cities, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
+
+        /*Reservar espacio para la pila*/
+        StackSize=((n_cities*((n_cities-3)/2))+2)/size;
 
         /*Reservar espacio para diagraph;*/
         digraph=(int*) malloc(sizeof(int)*n_cities*n_cities);
@@ -253,7 +257,6 @@ int main(int argc, char *argv[]){
         }
     }
 
-
     GET_TIME(inicio);
     while(pila->list_sz>0)
     {
@@ -264,7 +267,6 @@ int main(int argc, char *argv[]){
         checkReceivedBests();
     }
     MPI_Barrier(MPI_COMM_WORLD);
-
     GET_TIME(fin);
 
     if(rank==ROOT)
