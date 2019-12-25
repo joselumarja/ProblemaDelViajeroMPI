@@ -41,7 +41,15 @@ typedef stack_struct *my_stack_t;
 int n_cities;
 int StackSize;
 int *digraph;
+
+/*MPI variables*/
+int rank;
+int size;
+MPI_Status status;
+MPI_Request req;
+
 int *buffer;
+int *neightbors;
 
 tour_t best;
 tour_t tour;
@@ -67,18 +75,17 @@ void Rec_en_profund(tour_t tour);
 
 void freeTour(tour_t tour);
 
+/*Funciones para facilitar el envio y la recepcion de tours a traves de mpi*/
 tour_t convertBufferToStruct(int *buffer);
 void convertStructToBuffer(int *buffer, tour_t tour);
 
-void neightborsHypercube(int HypercubeDimension, int Rank, int *Neightbors);
-void calcMaxHypercubeNetwork(int Rank, int HypercubeDimension,int *Neightbors, int LocalData, int *Max); 
+/*Calcular los vecinos de cada procesador*/
+void setNeightbors(int rank, int size);
 
 int main(int argc, char *argv[]){
     FILE *diagraph_file;
 
-    int rank, size;
-    MPI_Status status;
-    MPI_Request req;
+    int n_tours_procesador;
 
     MPI_Init(&argc,&argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -88,6 +95,9 @@ int main(int argc, char *argv[]){
     short StatusCode;
 
     StackSize=((n_cities*((n_cities-3)/2))+2)/size;
+
+    /*Guardar el resto de nodos con los que hay que comunicarse*/
+    setNeightbors(rank,size);
 
     if(rank==ROOT)
     {
@@ -166,11 +176,13 @@ int main(int argc, char *argv[]){
         
     }
 
+    /*Definiendo el tipo de datos con el que vamos a enviar los tours*/
     MPI_Type_contiguous(n_cities+3,MPI_INT,&tour_t_mpi);
     MPI_Type_commit(&tour_t_mpi);
 
-    buffer=(int *) malloc(sizeof(int)*(n_cities+3));
-
+    int bufferOffset=n_cities+3;
+    buffer=(int *) malloc(sizeof(int)*bufferOffset);
+    
     /*Inicializar best tour*/
     best=(tour_t) malloc(sizeof(tour_struct));
     best->coste=65535;
@@ -184,25 +196,57 @@ int main(int argc, char *argv[]){
 
     if(rank==ROOT)
     {
+        /*Tour inicial*/
         tour=(tour_t) malloc(sizeof(tour_struct));
         tour->pobl=(int *) malloc(sizeof(int));
         tour->pobl[0]=StartNode;
         tour->contador=1;
         tour->coste=0;
 
+        /*Generar tour hasta que almenos haya tantos como procesadores*/
         while(pila->list_sz<size)
         {
             Rec_en_profund(tour);
         }
 
-        /*Repartir los recorridos entre los procesadores*/
+        /*NUmero de tours por procesador*/
+        n_tours_procesador=pila->list_sz/size;
 
+        /*Enviando al resto de procesos el numero de tours que van a guardar*/
+        if(MPI_Bcast(&n_tours_procesador, 1, MPI_INT, ROOT, MPI_COMM_WORLD)!=MPI_SUCCESS)
+	    {
+		    fprintf(stderr,"Fail in processes notification, numero de trozos\n");
+            MPI_Finalize();
+	        exit(EXIT_FAILURE);
+	    }
+
+        tour_t tour_aux;
+
+        /*Enviar tours a los procesadores*/
+        for(int i=0; i<size-1;i++)
+        {
+            for(int j=0;j<n_tours_procesador;j++)
+            {
+                tour_aux=pop();
+                convertStructToBuffer(buffer,tour_aux);
+                MPI_Isend(buffer,1,tour_t_mpi,neightbors[i],0,MPI_COMM_WORLD,&req);
+                free(tour_aux);
+            }
+        }
     }
     else
     {
-        /*Recibir recorridos a ejecutar*/
+        /*Recibir numero de recorridos a ejecutar*/
+        MPI_Bcast(&n_tours_procesador, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
+        /*Recibir recorridos a ejecutar*/
+        for(int j=0;j<n_tours_procesador;j++)
+        {
+            MPI_Recv(buffer,1,tour_t_mpi,ROOT,MPI_ANY_TAG,MPI_COMM_WORLD,&status);
+            push(convertBufferToStruct(buffer));
+        }
     }
+
 
     GET_TIME(inicio);
     while(pila->list_sz>0)
@@ -232,10 +276,14 @@ int main(int argc, char *argv[]){
         printBest();
     }
 
+    MPI_Finalize();
+
     /*Liberar memoria dinámica asignada*/
     free(pila->list);
     free(pila);
     freeTour(best);
+    free(buffer);
+    free(digraph);
 }
 
 tour_t pop()
@@ -314,8 +362,15 @@ void Rec_en_profund(tour_t tour)
                 freeTour(best);
                 best=checkTour;
 
+                printf("Nuevo best encontrado en %d\n",rank);
+                printBest();
+
                 /*Notificar al resto de procesos*/
-                /*USAR FUNCION QUE HE DEFINIDO convertStructToBuffer()*/
+                for(int i=0;i<size-1;i++)
+                {
+                    convertStructToBuffer(buffer,best);
+                    MPI_Isend(buffer,1,tour_t_mpi,neightbors[i],0,MPI_COMM_WORLD,&req);
+                }
             }
             else
             {
@@ -418,4 +473,17 @@ void checkReceivedBests()
                 
 		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &b_message, &status);
 	}
+}
+
+void setNeightbors(int rank, int size)
+{
+    neightbors=(int *) malloc(sizeof(int)*(size-1));
+
+    for(int i=0,j=0;i<size;i++)
+    {
+        if(i!=rank)
+        {
+            neightbors[j++]=i;
+        }
+    }
 }
