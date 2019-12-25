@@ -4,7 +4,7 @@
 #include <mpi.h>
 #include <math.h>
 
-#include <time.h>
+#include <timer.h>
 
 /*Declaraciones de constantes, tipos, variables y macros*/
 
@@ -119,9 +119,11 @@ int main(int argc, char *argv[]){
         /*Reservar espacio para diagraph;*/
         digraph=(int*) malloc(sizeof(int)*n_cities*n_cities);
 
-        for(int i=0; i < n_cities; i++)
+        int i,j;
+
+        for(i=0; i < n_cities; i++)
         {
-            for(int j=0; j < n_cities; j++)
+            for(j=0; j < n_cities; j++)
             {
                 fscanf(diagraph_file, "%d", &NeighbourCost);
                 digraph[(i*n_cities)+j]=NeighbourCost;
@@ -223,9 +225,11 @@ int main(int argc, char *argv[]){
         tour_t tour_aux;
 
         /*Enviar tours a los procesadores*/
-        for(int i=0; i<size-1;i++)
+        int i,j;
+
+        for(i=0; i<size-1;i++)
         {
-            for(int j=0;j<n_tours_procesador;j++)
+            for(j=0;j<n_tours_procesador;j++)
             {
                 tour_aux=pop();
                 convertStructToBuffer(buffer,tour_aux);
@@ -240,7 +244,9 @@ int main(int argc, char *argv[]){
         MPI_Bcast(&n_tours_procesador, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
         /*Recibir recorridos a ejecutar*/
-        for(int j=0;j<n_tours_procesador;j++)
+        int j;
+
+        for(j=0;j<n_tours_procesador;j++)
         {
             MPI_Recv(buffer,1,tour_t_mpi,ROOT,MPI_ANY_TAG,MPI_COMM_WORLD,&status);
             push(convertBufferToStruct(buffer));
@@ -284,6 +290,8 @@ int main(int argc, char *argv[]){
     freeTour(best);
     free(buffer);
     free(digraph);
+
+    return EXIT_SUCCESS;
 }
 
 tour_t pop()
@@ -337,7 +345,9 @@ int best_tour(tour_t tour)
 
 void printBest()
 {
-    for(int i=0; i<best->contador-1;i++)
+    int i;
+
+    for(i=0; i<best->contador-1;i++)
     {
         printf("%d -> ",best->pobl[i]);
     }
@@ -366,7 +376,9 @@ void Rec_en_profund(tour_t tour)
                 printBest();
 
                 /*Notificar al resto de procesos*/
-                for(int i=0;i<size-1;i++)
+                int i;
+
+                for(i=0;i<size-1;i++)
                 {
                     convertStructToBuffer(buffer,best);
                     MPI_Isend(buffer,1,tour_t_mpi,neightbors[i],0,MPI_COMM_WORLD,&req);
@@ -381,7 +393,9 @@ void Rec_en_profund(tour_t tour)
     else
     {
         int i=tour->pobl[tour->contador-1];
-        for(int pobId=0;pobId<n_cities;pobId++)
+        int pobId;
+
+        for(pobId=0;pobId<n_cities;pobId++)
         {
             if((digraph[(i*n_cities)+pobId]>0)&&(estaEnElRecorrido(tour,pobId)==false))
             {
@@ -402,7 +416,9 @@ void Rec_en_profund(tour_t tour)
 
 int estaEnElRecorrido(tour_t tour, int pob)
 {
-    for(int i=0; i<tour->contador; i++)
+    int i;
+
+    for(i=0; i<tour->contador; i++)
     {
         if(tour->pobl[i]==pob) return true;
     }
@@ -434,7 +450,9 @@ tour_t convertBufferToStruct(int *buffer)
     tour->contador=buffer[CounterPosition];
     tour->coste=buffer[CostPosition];
 
-    for(int i=0; i<=n_cities;i++)
+    int i;
+
+    for(i=0; i<=n_cities;i++)
         tour->pobl[i]=buffer[i+PoblationsPosition];
 
     return tour;
@@ -445,7 +463,9 @@ void convertStructToBuffer(int *buffer, tour_t tour)
     buffer[CostPosition]=tour->coste;
     buffer[CounterPosition]=tour->contador;
     
-    for(int i=0; i<=n_cities;i++)
+    int i;
+
+    for(i=0; i<=n_cities;i++)
         buffer[i+PoblationsPosition]=tour->pobl[i];
 }
 
@@ -479,7 +499,9 @@ void setNeightbors(int rank, int size)
 {
     neightbors=(int *) malloc(sizeof(int)*(size-1));
 
-    for(int i=0,j=0;i<size;i++)
+    int i,j;
+
+    for(i=0,j=0;i<size;i++)
     {
         if(i!=rank)
         {

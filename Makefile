@@ -3,7 +3,6 @@ DIREXE := exec/
 DIRHEA := include/
 DIRSRC := src/
 DIRMAIN := ./
-DIRUTILITIES := $(DIRHEA)utilities.o
 
 CFLAGS := -I$(DIRHEA) -c -Wall -ansi -g -lm
 IFLAGS :=  -c -Wall -ansi -g -lm
@@ -12,22 +11,19 @@ CC := gcc
 MPI := mpicc
 MPIRUN := mpirun
 
-all : dirs utilities Hypercube
+all : dirs ViajeroMPI
 
 dirs:
 	mkdir -p $(DIROBJ) $(DIREXE)
-
-utilities: $(DIRHEA)utilities.c
-	$(CC) $(IFLAGS) -o $(DIRUTILITIES) $^ $(LDLIBS)
 	
-Hypercube: $(DIROBJ)Hypercube.o 
-	$(MPI) $(DIRUTILITIES) $(DIROBJ)Hypercube.o -o $(DIRMAIN)Hypercube -lm
+ViajeroMPI: $(DIROBJ)G3ViajanteMPI.o 
+	$(MPI) $(DIROBJ)G3ViajanteMPI.o -o $(DIRMAIN)G3ViajanteMPI -lm
 	 
 $(DIROBJ)%.o: $(DIRSRC)%.c
 	$(MPI) $(CFLAGS) $^ -o $@
 
 test:
-	$(MPIRUN) -n 8 ./Hypercube ./datos.dat 3
+	$(MPIRUN) -n 8 ./G3ViajanteMPI ./archivo_matriz.txt
 
 clean : 
 	rm -rf *~ core $(DIROBJ) $(DIREXE) $(DIRHEA)*~ $(DIRSRC)*~ $(DIRUTILITIES) 
