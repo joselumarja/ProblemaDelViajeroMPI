@@ -23,7 +23,7 @@ $(DIROBJ)%.o: $(DIRSRC)%.c
 	$(MPI) $(CFLAGS) $^ -o $@
 
 test:
-	$(MPIRUN) -n 4 ./G3ViajanteMPI ./archivo_matriz
+	$(MPIRUN) -n 4 ./G3ViajanteMPI ./archivo_matriz19
 
 debug:
 	$(MPIRUN) -np 4 xterm -e gdb -ex run --args ./G3ViajanteMPI ./archivo_matriz

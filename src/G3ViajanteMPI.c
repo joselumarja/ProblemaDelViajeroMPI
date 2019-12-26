@@ -60,7 +60,7 @@ MPI_Datatype tour_t_mpi;
 tour_t pop();
 void push(tour_t tour);
 
-void printBest();
+void printTour(tour_t tour);
 int best_tour(tour_t tour);
 
 int factible(tour_t tour);
@@ -110,7 +110,7 @@ int main(int argc, char *argv[]){
         printf("Numero de ciudades: %d\n\n", n_cities);
 
         /*Reservar espacio para la pila*/
-        StackSize=((n_cities*((n_cities-3)/2))+2)/(size-1);
+        StackSize=(n_cities*((n_cities-3)/2))+2;
 
         /*Leer de diagraph_file el grafo, diagraph;*/
         int NeighbourCost;
@@ -128,7 +128,7 @@ int main(int argc, char *argv[]){
                 digraph[(i*n_cities)+j]=NeighbourCost;
                 printf("%d ",NeighbourCost);
             }
-            printf("\n\n");
+            printf("\n");
         }
 		
         /*Notificando a los procesos si no se han producido fallos*/
@@ -170,7 +170,7 @@ int main(int argc, char *argv[]){
         MPI_Bcast(&n_cities, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
         /*Reservar espacio para la pila*/
-        StackSize=((n_cities*((n_cities-3)/2))+2)/size;
+        StackSize=(n_cities*((n_cities-3)/2))+2;
 
         /*Reservar espacio para diagraph;*/
         digraph=(int*) malloc(sizeof(int)*n_cities*n_cities);
@@ -186,6 +186,8 @@ int main(int argc, char *argv[]){
 
     int bufferOffset=n_cities+3;
     buffer=(int *) malloc(sizeof(int)*bufferOffset);
+
+    tour_t tour_aux;
     
     /*Inicializar best tour*/
     best=(tour_t) malloc(sizeof(tour_struct));
@@ -202,7 +204,7 @@ int main(int argc, char *argv[]){
     {
         /*Tour inicial*/
         tour=(tour_t) malloc(sizeof(tour_struct));
-        tour->pobl=(int *) malloc(sizeof(int));
+        tour->pobl=(int *) malloc(sizeof(int)*(n_cities+1));
         tour->pobl[0]=StartNode;
         tour->contador=1;
         tour->coste=0;
@@ -223,8 +225,6 @@ int main(int argc, char *argv[]){
             MPI_Finalize();
 	        exit(EXIT_FAILURE);
 	    }
-
-        tour_t tour_aux;
 
         /*Enviar tours a los procesadores*/
         int i,j;
@@ -251,7 +251,9 @@ int main(int argc, char *argv[]){
         for(j=0;j<n_tours_procesador;j++)
         {
             MPI_Recv(buffer,1,tour_t_mpi,ROOT,MPI_ANY_TAG,MPI_COMM_WORLD,&status);
-            push(convertBufferToStruct(buffer));
+            tour_aux=convertBufferToStruct(buffer);
+            push(tour_aux);
+            freeTour(tour_aux);
         }
     }
 
@@ -259,6 +261,7 @@ int main(int argc, char *argv[]){
     while(pila->list_sz>0)
     {
         tour=pop();
+    
         Rec_en_profund(tour);
 
         /*Comprobar si se ha recibido algun best nuevo*/
@@ -279,7 +282,7 @@ int main(int argc, char *argv[]){
 
         /*best tour*/
         printf("Best tour:\n");
-        printBest();
+        printTour(best);
     }
 
     MPI_Finalize();
@@ -310,7 +313,15 @@ tour_t pop()
 
 void push(tour_t tour)
 {
-    pila->list[pila->list_sz]=tour;
+    tour_t tour_aux = (tour_t) malloc(sizeof(tour_struct));
+    tour_aux->pobl=(int*) malloc(sizeof(int)*(n_cities+1));
+
+    tour_aux->contador=tour->contador;
+    tour_aux->coste=tour->coste;
+
+    memcpy(tour_aux->pobl,tour->pobl,sizeof(int)*tour->contador);
+
+    pila->list[pila->list_sz]=tour_aux;
     pila->list_sz++;
 }
 
@@ -319,7 +330,7 @@ tour_t anadir_pob(tour_t tour, int pob)
     int poblation_offset=(tour->pobl[tour->contador-1]*n_cities)+pob;
 
     tour_t newTour=(tour_t) malloc(sizeof(tour_struct));
-    newTour->pobl=(int *) malloc(sizeof(int)*(tour->contador+1));
+    newTour->pobl=(int *) malloc(sizeof(int)*(n_cities+1));
 
     /*Copia de los valores anteriores del tour*/
     memcpy(newTour->pobl,tour->pobl,sizeof(int)*(tour->contador));
@@ -343,16 +354,16 @@ int best_tour(tour_t tour)
     }
 }
 
-void printBest()
+void printTour(tour_t tour)
 {
     int i;
 
-    for(i=0; i<best->contador-1;i++)
+    for(i=0; i<tour->contador-1;i++)
     {
-        printf("%d -> ",best->pobl[i]);
+        printf("%d -> ",tour->pobl[i]);
     }
-    printf("%d\n",best->pobl[best->contador-1]);
-    printf("Coste: %d\n\n",best->coste);
+    printf("%d\n",tour->pobl[tour->contador-1]);
+    printf("Coste: %d\n\n",tour->coste);
 }
 
 void Rec_en_profund(tour_t tour)
@@ -373,7 +384,7 @@ void Rec_en_profund(tour_t tour)
                 best=checkTour;
 
                 printf("Nuevo best encontrado en %d\n",rank);
-                printBest();
+                printTour(best);
 
                 /*Notificar al resto de procesos*/
                 int i;
@@ -404,10 +415,8 @@ void Rec_en_profund(tour_t tour)
                 {
                     push(nuevo_tour);
                 }
-                else
-                {
-                    freeTour(nuevo_tour);
-                }
+
+                freeTour(nuevo_tour);
             }
         }
         freeTour(tour);
