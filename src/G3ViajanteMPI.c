@@ -209,9 +209,14 @@ int main(int argc, char *argv[]){
         tour->contador=1;
         tour->coste=0;
 
+        /*Introducir primer tour en la pila*/
+        push(tour);
+        free(tour);
+
         /*Generar tour hasta que almenos haya tantos como procesadores*/
         while(pila->list_sz<size)
         {
+            tour=pop();
             Rec_en_profund(tour);
         }
 
