@@ -353,10 +353,8 @@ int best_tour(tour_t tour)
     {
         return true;
     }
-    else
-    {
+
         return false;
-    }
 }
 
 void printTour(tour_t tour)
