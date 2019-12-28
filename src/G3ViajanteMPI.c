@@ -271,7 +271,7 @@ int main(int argc, char *argv[]){
         /*Comprobar si se ha recibido algun best nuevo*/
         checkReceivedBests();
     }
-    printf("Proceso: %d finaliza exploracion\n",rank);
+    printf("\nProceso: %d finaliza exploracion\n",rank);
     MPI_Barrier(MPI_COMM_WORLD);
     GET_TIME(fin);
 
@@ -283,7 +283,7 @@ int main(int argc, char *argv[]){
         /*Imprimir resultados: besttour, coste y tiempo*/
         int tiempo=fin-inicio;  /*calculamos tiempo*/
 
-        printf("Tiempo empleado en la ejecucion %d s\n",tiempo);
+        printf("\nTiempo empleado en la ejecucion %d s\n",tiempo);
 
         /*best tour*/
         printf("Best tour:\n");
@@ -366,7 +366,7 @@ void printTour(tour_t tour)
         printf("%d -> ",tour->pobl[i]);
     }
     printf("%d\n",tour->pobl[tour->contador-1]);
-    printf("Coste: %d\n\n",tour->coste);
+    printf("Coste: %d\n",tour->coste);
 }
 
 void Rec_en_profund(tour_t tour)
@@ -386,7 +386,7 @@ void Rec_en_profund(tour_t tour)
                 freeTour(best);
                 best=checkTour;
 
-                printf("Nuevo best encontrado en %d\n",rank);
+                printf("\nNuevo best encontrado en %d\n",rank);
                 printTour(best);
 
                 /*Notificar al resto de procesos*/
