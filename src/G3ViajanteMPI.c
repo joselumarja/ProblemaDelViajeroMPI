@@ -112,7 +112,6 @@ int main(int argc, char *argv[]){
         /*Reservar espacio para la pila*/
         StackSize=(n_cities*((n_cities-3)/2))+2;
 
-        /*Leer de diagraph_file el grafo, diagraph;*/
         int NeighbourCost;
 
         /*Reservar espacio para diagraph;*/
@@ -272,6 +271,7 @@ int main(int argc, char *argv[]){
         /*Comprobar si se ha recibido algun best nuevo*/
         checkReceivedBests();
     }
+    printf("Proceso: %d finaliza exploracion\n",rank);
     MPI_Barrier(MPI_COMM_WORLD);
     GET_TIME(fin);
 
@@ -354,7 +354,7 @@ int best_tour(tour_t tour)
         return true;
     }
 
-        return false;
+    return false;
 }
 
 void printTour(tour_t tour)
